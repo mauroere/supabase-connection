@@ -1,42 +1,53 @@
-import React, { useState } from 'react';
+import React, { useCallback } from 'react';
 import { Minus, Plus, Trash2 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { CheckoutForm } from './CheckoutForm';
 
-export function Cart() {
-  const { items, removeFromCart, updateQuantity, total } = useCart();
-  const [isCheckingOut, setIsCheckingOut] = useState(false);
+interface CartProps {
+  openCheckout: () => void;
+}
+
+export const Cart = React.memo(({ openCheckout }: CartProps) => {
+  const { items, total, removeFromCart, updateQuantity } = useCart();
+
+  const handleDecreaseQuantity = useCallback(
+    (id: string, quantity: number) => {
+      updateQuantity(id, quantity - 1);
+    },
+    [updateQuantity]
+  );
+
+  const handleIncreaseQuantity = useCallback(
+    (id: string, quantity: number) => {
+      updateQuantity(id, quantity + 1);
+    },
+    [updateQuantity]
+  );
+
+  const handleRemoveFromCart = useCallback(
+    (id: string) => {
+      if (window.confirm('¿Estás seguro de que deseas eliminar este producto del carrito?')) {
+        removeFromCart(id);
+      }
+    },
+    [removeFromCart]
+  );
 
   if (items.length === 0) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-500">Your cart is empty</p>
-      </div>
-    );
-  }
-
-  if (isCheckingOut) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        <button
-          onClick={() => setIsCheckingOut(false)}
-          className="mb-6 text-blue-600 hover:text-blue-800"
-        >
-          ← Back to Cart
-        </button>
-        <CheckoutForm />
+        <p className="text-gray-500">Tu carrito está vacío</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-6">Shopping Cart</h2>
+    <div className="bg-white rounded-lg shadow-lg p-6">
+      <h2 className="text-2xl font-bold mb-6">Carrito de Compras</h2>
       <div className="space-y-4">
-        {items.map(item => (
+        {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-4 py-4 border-b border-gray-200"
+            className="flex flex-wrap items-center gap-4 py-4 border-b border-gray-200"
           >
             <img
               src={item.image}
@@ -49,20 +60,20 @@ export function Cart() {
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                onClick={() => handleDecreaseQuantity(item.id, item.quantity)}
                 className="p-1 rounded-full hover:bg-gray-100"
               >
                 <Minus size={20} />
               </button>
               <span className="w-8 text-center">{item.quantity}</span>
               <button
-                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                onClick={() => handleIncreaseQuantity(item.id, item.quantity)}
                 className="p-1 rounded-full hover:bg-gray-100"
               >
                 <Plus size={20} />
               </button>
               <button
-                onClick={() => removeFromCart(item.id)}
+                onClick={() => handleRemoveFromCart(item.id)}
                 className="p-1 rounded-full hover:bg-gray-100 text-red-500 ml-2"
               >
                 <Trash2 size={20} />
@@ -76,11 +87,11 @@ export function Cart() {
         <span className="text-2xl font-bold">${total.toFixed(2)}</span>
       </div>
       <button
-        onClick={() => setIsCheckingOut(true)}
-        className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors"
+        onClick={openCheckout}
+        className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition"
       >
-        Proceed to Checkout
+        Proceder al Pago
       </button>
     </div>
   );
-}
+});

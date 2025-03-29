@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { ShippingAddress } from '../types';
-import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
+import { db } from '../lib/database';
 
 export function CheckoutForm() {
   const { items, total, clearCart } = useCart();
@@ -21,47 +21,61 @@ export function CheckoutForm() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    if (items.length === 0) {
+      toast.error('Your cart is empty. Please add items before checking out.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!db) {
+      toast.error('Database is not initialized. Please try again later.');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
+      const storedUser = localStorage.getItem('user');
+      if (!storedUser) {
         toast.error('Please sign in to complete your purchase');
         return;
       }
+      const user = JSON.parse(storedUser);
+
+      // Check stock availability
+      for (const item of items) {
+        const product = await db.get('SELECT stock FROM products WHERE id = ?', [item.id]);
+        if (!product || product.stock < item.quantity) {
+          throw new Error(`Insufficient stock for ${item.name}`);
+        }
+      }
 
       // Create order
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          total,
-          shipping_address: shippingAddress,
-        })
-        .select()
-        .single();
-
-      if (orderError) throw orderError;
+      const result = await db.run(
+        'INSERT INTO orders (user_id, total, shipping_address) VALUES (?, ?, ?)',
+        [user.id, total, JSON.stringify(shippingAddress)]
+      );
+      const orderId = result.lastID;
 
       // Create order items
-      const orderItems = items.map(item => ({
-        order_id: order.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        price: item.price,
-      }));
+      for (const item of items) {
+        await db.run(
+          'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
+          [orderId, item.id, item.quantity, item.price]
+        );
+      }
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(orderItems);
-
-      if (itemsError) throw itemsError;
+      // Update stock
+      for (const item of items) {
+        await db.run(
+          'UPDATE products SET stock = stock - ? WHERE id = ?',
+          [item.quantity, item.id]
+        );
+      }
 
       // Clear cart and show success message
       clearCart();
       toast.success('Order placed successfully!');
-      
-      // TODO: Redirect to Mercado Pago payment page
-      
+
     } catch (error) {
       console.error('Error creating order:', error);
       toast.error('Failed to place order. Please try again.');

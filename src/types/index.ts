@@ -47,3 +47,8 @@ export interface OrderItem {
   quantity: number;
   price: number;
 }
+
+export interface User {
+  id: string;
+  email: string;
+}
